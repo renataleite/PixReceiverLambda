@@ -1,0 +1,15 @@
+echo "# Excluir pastas e arquivos do Visual Studio
+.vs/
+bin/
+obj/
+
+# Excluir arquivos de log
+*.log
+
+# Excluir arquivos temporários
+*.tmp
+*.temp
+
+# Excluir arquivos de sistema
+.DS_Store
+Thumbs.db" > .gitignore
