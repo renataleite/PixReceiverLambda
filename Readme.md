@@ -1,49 +1,124 @@
-# AWS Lambda Empty Function Project
+# PixReceiverLambda
 
-This starter project consists of:
-* Function.cs - class file containing a class with a single function handler method
-* aws-lambda-tools-defaults.json - default argument settings for use with Visual Studio and command line deployment tools for AWS
+Função Lambda para processar transações Pix e enviar mensagens para uma fila SQS.
 
-You may also have a test project depending on the options selected.
+## Descrição
 
-The generated function handler is a simple method accepting a string argument that returns the uppercase equivalent of the input string. Replace the body of this method, and parameters, to suit your needs. 
+Este projeto implementa uma função AWS Lambda que recebe transações Pix, processa os dados e envia uma mensagem para uma fila Amazon SQS. O propósito é demonstrar como utilizar AWS Lambda e SQS para processar transações financeiras de forma eficiente e escalável.
 
-## Here are some steps to follow from Visual Studio:
+## Estrutura do Projeto
 
-To deploy your function to AWS Lambda, right click the project in Solution Explorer and select *Publish to AWS Lambda*.
+- `Function.cs`: Contém a lógica principal da função Lambda.
+- `PixReceiverLambda.csproj`: Arquivo de configuração do projeto .NET.
+- `Readme.md`: Documentação do projeto.
 
-To view your deployed function open its Function View window by double-clicking the function name shown beneath the AWS Lambda node in the AWS Explorer tree.
+## Pré-requisitos
 
-To perform testing against your deployed function use the Test Invoke tab in the opened Function View window.
+- .NET SDK 8.0 ou superior
+- AWS CLI configurado com as credenciais apropriadas
+- Conta AWS com permissões para criar e gerenciar funções Lambda e filas SQS
 
-To configure event sources for your deployed function, for example to have your function invoked when an object is created in an Amazon S3 bucket, use the Event Sources tab in the opened Function View window.
+## Configuração
 
-To update the runtime configuration of your deployed function use the Configuration tab in the opened Function View window.
+1. **Clone o repositório**:
 
-To view execution logs of invocations of your function use the Logs tab in the opened Function View window.
-
-## Here are some steps to follow to get started from the command line:
-
-Once you have edited your template and code you can deploy your application using the [Amazon.Lambda.Tools Global Tool](https://github.com/aws/aws-extensions-for-dotnet-cli#aws-lambda-amazonlambdatools) from the command line.
-
-Install Amazon.Lambda.Tools Global Tools if not already installed.
-```
-    dotnet tool install -g Amazon.Lambda.Tools
+```bash
+git clone https://github.com/seu-usuario/PixReceiverLambda.git
+cd PixReceiverLambda/src/PixReceiverLambda
 ```
 
-If already installed check if new version is available.
-```
-    dotnet tool update -g Amazon.Lambda.Tools
+2. **Instale as dependências do projeto**:
+
+```bash
+dotnet restore
 ```
 
-Execute unit tests
-```
-    cd "PixReceiverLambda/test/PixReceiverLambda.Tests"
-    dotnet test
+3. **Configure o AWS CLI**:
+
+```bash
+aws configure
 ```
 
-Deploy function to AWS Lambda
+## Implementação
+
+### Código da Função Lambda
+
+```csharp
+using Amazon.Lambda.Core;
+using Amazon.SQS;
+using Amazon.SQS.Model;
+using Newtonsoft.Json;
+
+// Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
+[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
+
+namespace PixReceiverLambda;
+
+public class Function
+{
+    // URL da fila SQS
+    private static readonly string QueueUrl = "https://sqs.us-east-1.amazonaws.com/440724126630/PixQueue";
+
+    private readonly IAmazonSQS _sqsClient;
+
+    public Function() : this(new AmazonSQSClient()) { }
+
+    public Function(IAmazonSQS sqsClient)
+    {
+        _sqsClient = sqsClient;
+    }
+
+    public async Task<string> FunctionHandler(PixTransaction pixTransaction, ILambdaContext context)
+    {
+        var message = JsonConvert.SerializeObject(pixTransaction);
+        var request = new SendMessageRequest
+        {
+            QueueUrl = QueueUrl,
+            MessageBody = message
+        };
+        await _sqsClient.SendMessageAsync(request);
+        return "Transaction received and sent to SQS";
+    }
+}
+
+public class PixTransaction
+{
+    public string TransactionId { get; set; }
+    public decimal Amount { get; set; }
+    public string Sender { get; set; }
+    public string Receiver { get; set; }
+    public DateTime Timestamp { get; set; }
+}
 ```
-    cd "PixReceiverLambda/src/PixReceiverLambda"
-    dotnet lambda deploy-function
+
+### Implantação da Função Lambda
+
+1. **Compile o projeto**:
+
+```bash
+dotnet build
 ```
+
+2. **Implante a função Lambda**:
+
+```bash
+dotnet lambda deploy-function PixReceiverLambda --region us-east-1
+```
+
+## Teste
+
+1. **Crie um Evento de Teste no Console da AWS Lambda**:
+    - Vá para a aba "Test" (Testar) no console da função Lambda.
+    - Crie um novo evento de teste com o seguinte payload:
+
+    ```json
+    {
+        "TransactionId": "12345",
+        "Amount": 100.50,
+        "Sender": "Alice",
+        "Receiver": "Bob",
+        "Timestamp": "2023-06-21T12:34:56Z"
+    }
+    ```
+
+2. **Execute o teste e verifique os logs no CloudWatch** para garantir que a mensagem foi enviada para a fila SQS.
